@@ -43,7 +43,6 @@ def init():
         "link_all":       "https://t.me/link4",
         "how_to_video":   "",
         "proof_link":     "",
-        "proof_channel":  "",
         "extra_admins":   "",
     }
     with conn() as c:
