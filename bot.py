@@ -12,9 +12,10 @@ import database as db
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
 log = logging.getLogger(__name__)
 
-BOT_TOKEN    = os.getenv("BOT_TOKEN", "8702277983:AAH5uO3PgpYN-G13aV9S461nqgu5s4M-UlM")
-ADMIN_ID     = int(os.getenv("ADMIN_ID", "6198353113"))
-BOT_USERNAME = os.getenv("BOT_USERNAME", "YourBotUsername")   # set in Railway env, no @
+# ── ENV VARS (set these in Railway → Variables tab) ────────
+BOT_TOKEN    = os.environ["8702277983:AAH5uO3PgpYN-G13aV9S461nqgu5s4M-UlM"]                         # REQUIRED — no default, crash-fast if missing
+ADMIN_ID     = int(os.environ.get("ADMIN_ID", "6198353113"))
+BOT_USERNAME = os.environ.get("BOT_USERNAME", "YourBotUsername")  # no @ prefix
 
 # ── category maps ──────────────────────────────────────────
 CAT_MAP     = {"Indian": "indian", "R@p": "premium", "Child": "movies", "All": "all"}
@@ -47,7 +48,6 @@ def admin_keyboard(admin_id=None):
         [notify_label],
     ], resize_keyboard=True)
 
-# ── User bottom keyboard: ONE button per row ──────────────
 USER_BOTTOM_KB = ReplyKeyboardMarkup([
     [KeyboardButton("Payment proofs 📋")],
     [KeyboardButton("Payment done ✅")],
@@ -74,7 +74,7 @@ def get_all_admins():
                 if x.isdigit():
                     extra_list.append(int(x))
         return [ADMIN_ID] + extra_list
-    except:
+    except Exception:
         return [ADMIN_ID]
 
 def is_admin(uid):
@@ -96,7 +96,7 @@ async def send_premium_categories(bot, chat_id):
     ])
     try:
         await bot.send_photo(chat_id=chat_id, photo=img, reply_markup=kb)
-    except:
+    except Exception:
         await bot.send_message(chat_id=chat_id, text="💎 Choose Your Pack:", reply_markup=kb)
 
 async def ask_for_screenshot(bot, chat_id):
@@ -161,9 +161,8 @@ async def send_payment_qr(bot, chat_id, cat):
 
 # ── Auto-post payment proof to proof channel ──────────────
 async def post_proof_to_channel(bot, photo_id, user):
-    """Forward the payment screenshot to the proof channel with promo caption."""
     s = db.all_settings()
-    proof_channel = s.get("proof_channel", "")   # e.g. @MyProofChannel or -100xxxxxxxxxx
+    proof_channel = s.get("proof_channel", "")
     if not proof_channel:
         log.warning("proof_channel not set — skipping channel post")
         return
@@ -247,7 +246,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption=user_text,
                 reply_markup=inline_kb
             )
-        except:
+        except Exception:
             await update.message.reply_text(user_text, reply_markup=inline_kb)
 
         await update.message.reply_text("👇 Menu 👇", reply_markup=USER_BOTTOM_KB)
@@ -344,7 +343,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # NEW: wait_proof_channel state
         if state == "wait_proof_channel" and text:
             db.set_setting("proof_channel", text.strip())
             db.set_state(user.id, "none")
@@ -450,7 +448,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     elif text:
                         await context.bot.send_message(chat_id=uid, text=text)
                     ok += 1
-                except:
+                except Exception:
                     fail += 1
             await message.reply_text(
                 f"📢 *Broadcast Done!*\n✅ Sent: {ok}\n❌ Failed: {fail}",
@@ -464,7 +462,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.set_state(user.id, "none")
         s = db.all_settings()
 
-        # Tell user payment is pending
         try:
             await context.bot.send_photo(
                 chat_id=user.id,
@@ -475,7 +472,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"Contact support {s.get('support','@support')} ✅"
                 )
             )
-        except:
+        except Exception:
             await context.bot.send_message(
                 chat_id=user.id,
                 text=(
@@ -485,10 +482,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             )
 
-        # ── Auto-post proof to proof channel ────────────
         await post_proof_to_channel(context.bot, photo_id, user)
 
-        # ── Notify ALL admins with approve/reject buttons ─
         admin_kb = InlineKeyboardMarkup([[
             InlineKeyboardButton("✅ Approve", callback_data=f"approve_{user.id}"),
             InlineKeyboardButton("❌ Reject",  callback_data=f"reject_{user.id}")
@@ -643,7 +638,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "(This is the link shown to users when they tap 'Payment Proofs')"
             )
 
-        # NEW: Set Proof Channel button
         elif text == "Set Proof Channel":
             db.set_state(user.id, "wait_proof_channel")
             await message.reply_text(
@@ -761,7 +755,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.del_demo(did)
         try:
             await query.edit_message_caption(caption="✅ Demo video deleted!")
-        except:
+        except Exception:
             pass
 
     elif data.startswith("approve_"):
@@ -805,7 +799,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption=old_cap + f"\n\n✅ APPROVED by @{user.username or user.id}",
                 parse_mode="Markdown"
             )
-        except:
+        except Exception:
             pass
 
         approved_by = f"@{user.username}" if user.username else str(user.id)
@@ -817,7 +811,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         text=f"✅ Payment for user `{target}` was *APPROVED* by {approved_by}",
                         parse_mode="Markdown"
                     )
-                except:
+                except Exception:
                     pass
 
         await query.answer("✅ Approved! Link sent to user.", show_alert=True)
@@ -848,7 +842,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption=old_cap + f"\n\n❌ REJECTED by @{user.username or user.id}",
                 parse_mode="Markdown"
             )
-        except:
+        except Exception:
             pass
 
         rejected_by = f"@{user.username}" if user.username else str(user.id)
@@ -860,7 +854,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         text=f"❌ Payment for user `{target}` was *REJECTED* by {rejected_by}",
                         parse_mode="Markdown"
                     )
-                except:
+                except Exception:
                     pass
 
         await query.answer("❌ Rejected! User notified.", show_alert=True)
